@@ -42,6 +42,7 @@ type AttestationAddOpts struct {
 type newCrafterOpts struct {
 	cpConnection *grpc.ClientConn
 	opts         []crafter.NewOpt
+	auth  	     *api.Attestation_Auth
 }
 
 type AttestationAdd struct {

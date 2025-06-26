@@ -26,6 +26,7 @@ import (
 	"github.com/chainloop-dev/chainloop/pkg/attestation/crafter"
 	clientAPI "github.com/chainloop-dev/chainloop/pkg/attestation/crafter/api/attestation/v1"
 	"github.com/chainloop-dev/chainloop/pkg/policies"
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -47,6 +48,18 @@ type AttestationInit struct {
 	dryRun, force  bool
 	c              *crafter.Crafter
 	useRemoteState bool
+	Auth           *Auth
+}
+
+const (
+	AuthTypeUser                 = "USER"
+	AuthTypeAPIToken             = "API_TOKEN"
+	AuthTypeFederatedGitlabToken = "FEDERATED_GITLAB_TOKEN"
+)
+
+type Auth struct {
+	Type string
+	ID   string
 }
 
 // ErrAttestationAlreadyExist means that there is an attestation in progress
@@ -66,12 +79,18 @@ func NewAttestationInit(cfg *AttestationInitOpts) (*AttestationInit, error) {
 		return nil, fmt.Errorf("failed to load crafter: %w", err)
 	}
 
+	auth, err := extractAuthInfo(cfg.AuthTokenRaw)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract auth info: %w", err)
+	}
+
 	return &AttestationInit{
 		ActionsOpts:    cfg.ActionsOpts,
 		c:              c,
 		dryRun:         cfg.DryRun,
 		force:          cfg.Force,
 		useRemoteState: cfg.UseRemoteState,
+		Auth:           auth,
 	}, nil
 }
 
@@ -228,6 +247,7 @@ func (action *AttestationInit) Run(ctx context.Context, opts *AttestationInitRun
 			TimestampAuthorityURL: timestampAuthorityURL,
 			SigningCAName:         signingCAName,
 		},
+		Auth: 					(*crafter.Auth)(action.Auth),
 	}
 
 	if err := action.c.Init(ctx, initOpts); err != nil {
@@ -245,6 +265,32 @@ func (action *AttestationInit) Run(ctx context.Context, opts *AttestationInitRun
 	}
 
 	return attestationID, nil
+}
+
+// Helper function to extract auth info from JWT token
+func extractAuthInfo(token string) (*Auth, error) {
+	if token == "" {
+		return nil, errors.New("empty token")
+	}
+
+	parser := &jwt.Parser{}
+	claims := jwt.MapClaims{}
+	_, _, err := parser.ParseUnverified(token, &claims)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse token: %w", err)
+	}
+
+	if userID, ok := claims["user_id"].(string); ok {
+		return &Auth{Type: AuthTypeUser, ID: userID}, nil
+	}
+	if tokenID, ok := claims["jti"].(string); ok {
+		return &Auth{Type: AuthTypeAPIToken, ID: tokenID}, nil
+	}
+	if gitlabTokenID, ok := claims["jti"].(string); ok {
+		return &Auth{Type: AuthTypeFederatedGitlabToken, ID: gitlabTokenID}, nil
+	}
+
+	return nil, errors.New("could not determine auth type from token")
 }
 
 func enrichContractMaterials(ctx context.Context, schema *v1.CraftingSchema, client pb.AttestationServiceClient, logger *zerolog.Logger) error {

@@ -25,6 +25,7 @@ import (
 	pb "github.com/chainloop-dev/chainloop/app/controlplane/api/controlplane/v1"
 	"github.com/chainloop-dev/chainloop/pkg/attestation"
 	"github.com/chainloop-dev/chainloop/pkg/attestation/crafter"
+	api "github.com/chainloop-dev/chainloop/pkg/attestation/crafter/api/attestation/v1"
 	"github.com/chainloop-dev/chainloop/pkg/attestation/renderer"
 	"github.com/chainloop-dev/chainloop/pkg/attestation/signer"
 	"github.com/secure-systems-lab/go-securesystemslib/dsse"
@@ -40,6 +41,7 @@ type AttestationPushOpts struct {
 
 	LocalStatePath string
 	SignServerOpts *SignServerOpts
+	Auth           *api.Attestation_Auth
 }
 
 // SignServerOpts holds SignServer integration options
@@ -74,7 +76,7 @@ func NewAttestationPush(cfg *AttestationPushOpts) (*AttestationPush, error) {
 		bundlePath:     cfg.BundlePath,
 		signServerOpts: cfg.SignServerOpts,
 		localStatePath: cfg.LocalStatePath,
-		newCrafterOpts: &newCrafterOpts{cpConnection: cfg.CPConnection, opts: opts},
+		newCrafterOpts: &newCrafterOpts{cpConnection: cfg.CPConnection, opts: opts, auth: cfg.Auth},
 	}, nil
 }
 

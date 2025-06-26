@@ -58,6 +58,12 @@ type ProvenancePredicateV02 struct {
 	SigningCA string `json:"signingCA,omitempty"`
 	// Default TSA used for signing (not necessarily the one used)
 	SigningTSA string `json:"signingTSA,omitempty"`
+	Auth       *Auth  `json:"auth,omitempty"`
+}
+
+type Auth struct {
+	Type string `json:"type"`
+	ID   string `json:"id"`
 }
 
 type PolicyViolationBlockingStrategy string
@@ -233,6 +239,13 @@ func (r *RendererV02) predicate() (*structpb.Struct, error) {
 		PolicyAttBlocked:            hasViolations && r.att.GetBlockOnPolicyViolation() && !r.att.GetBypassPolicyCheck(),
 		SigningCA:                   r.att.GetSigningOptions().GetSigningCa(),
 		SigningTSA:                  r.att.GetSigningOptions().GetTimestampAuthorityUrl(),
+	}
+
+	if auth := r.att.GetAuth(); auth != nil {
+		p.Auth = &Auth{
+			Type: auth.GetType(),
+			ID:   auth.GetId(),
+		}
 	}
 
 	// transform to structpb.Struct in a two steps process
